@@ -1,28 +1,33 @@
-'''
-Script going to addresses from file and take screenshots
-'''
-from threading import Thread
-from multiprocessing import Queue, cpu_count
+#
+# Script going to addresses from file and take screenshots
+# 
+from multiprocessing import Process, Queue, cpu_count
 from selenium import webdriver
 import logging
 import os
 import json
-
 #########################################################################################
-#                                      VARIABLES
+#                              VARIABLES IN THE HEADER
 #########################################################################################
 screens_directory = './scrs/'
-hosts_file = 'scan_result.json'  # Nmap оr Masscan output JSON file name
+hosts_file = 'ips.json'  # Nmap оr Masscan output JSON file name
+log_filename = "log.txt"
 count_of_workers = cpu_count()  # Count of workers.
 page_load_timeout = 5
 take_screenshot_anyway = True
 ''' True - will take scr. even if page load not complete in the <page_load_timeout> time;
-    False - do not take scr. of such pages.'''
+    False - do not take scr. of such pages. May be useful if generated many "white pages"
+'''
 #########################################################################################
 
 
 def say(i, text):
-    colors = [30, 32, 34, 35, 36, 93]
+    """
+    Colorized & personalized messages from workers
+    :param i: Worker id
+    :param text: Message
+    """
+    colors = [30, 32, 34, 35, 36, 93, 30, 32, 34, 35, 36, 93]
     return log.info(f"\033[{colors[i]}m Worker-{i} said: {text}")
 
 
@@ -32,7 +37,7 @@ def parse_hosts(hosts_file):
         lines = file.readlines()[:-1]
     for line in lines:
         hosts.append(json.loads(line[:-2])['ip'])
-    log.info(f'Список адресов загружен. Количество адресов:{len(hosts)}')
+    log.info(f'Addresses loaded. Addresses count is:{len(hosts)}')
     return hosts
 
 
@@ -40,13 +45,13 @@ def selenium_task(id, worker, host):
     url = f'http://{host}/'
     filename = f"{screens_directory}{host}.png"
     try:
-        say(id, f"Begining to load host {host}...")
+        say(id, f"=_= Begining to load host {host}...")
         try:
             worker.get(url)
             worker.get_screenshot_as_file(filename)
-            say(id, f"I'm successfully load and screen {host}")
+            say(id, f"(V) I'm successfully load and screen {host}")
         except:
-            say(id, f"Page load dont complite from {host}")
+            say(id, f"(X) Page load not complite from {host}")
             if take_screenshot_anyway:
                 worker.get_screenshot_as_file(filename)
     except:
@@ -58,7 +63,7 @@ def selenium_queue_listener(hosts_q, workers_q):
     while True:
         current_host = hosts_q.get()
         if current_host == 'STOP':
-            log.warning("STOP encountered, killing worker thread")
+            log.warning("STOP encountered, killing worker process")
             hosts_q.put(current_host)
             break
         else:
@@ -71,7 +76,8 @@ def selenium_queue_listener(hosts_q, workers_q):
 
 if __name__ == '__main__':
 
-    logging.basicConfig(filename="log.log", level=logging.INFO, )
+    FORMAT = '%(asctime)-15s %(message)s'
+    logging.basicConfig(filename=log_filename, level=logging.INFO, format=FORMAT)
     log = logging.getLogger("logger")
     log.addHandler(logging.StreamHandler())
 
@@ -97,9 +103,9 @@ if __name__ == '__main__':
     for i in worker_ids:
         selenium_workers[i] = webdriver.Firefox()
         selenium_workers[i].set_page_load_timeout(page_load_timeout)
-        say(i, f"I born! I'm so happy! Give me some work!")
+        say(i, f"I born! I'm happy and ready to work!")
 
-    selenium_processes = [Thread(target=selenium_queue_listener,
+    selenium_processes = [Process(target=selenium_queue_listener,
                                  args=(hosts_queue, workers_queue)) for _ in worker_ids]
     for p in selenium_processes:
         p.daemon = True
@@ -109,6 +115,6 @@ if __name__ == '__main__':
         p.join()
 
     # Quit all the web workers elegantly in the background
-    log.info("\033[{colors[31]}m Tearing down web workers")
+    log.info("\033[31m ---Dismissing web workers---")
     for w in selenium_workers.values():
         w.quit()
