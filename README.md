@@ -12,4 +12,4 @@ It is created as useful addition to the <b>Nmap</b> and <b>masscan</b> utilities
 ...
 ```
 
-If you want use custom list-file with IPs, just edit <i>parse_hosts()</i> function as you want.
+If you want use custom list-file with IPs, just edit <i>parse_hosts()</i> function so it return list with IPs.
