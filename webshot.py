@@ -6,6 +6,7 @@ from selenium import webdriver
 import logging
 import os
 import json
+from time import sleep
 #########################################################################################
 #                              VARIABLES IN THE HEADER
 #########################################################################################
@@ -14,10 +15,13 @@ hosts_file = 'ips.json'  # Nmap оr Masscan output JSON file name
 log_filename = "log.txt"
 count_of_workers = cpu_count()  # Count of workers.
 page_load_timeout = 5
+wait_on_page = 1
 take_screenshot_anyway = True
 ''' True - will take scr. even if page load not complete in the <page_load_timeout> time;
     False - do not take scr. of such pages. May be useful if generated many "white pages"
 '''
+def driver(): return webdriver.Firefox(executable_path='./driver/geckodriver')
+# Change to webdriver.Chrome() if need.
 #########################################################################################
 
 
@@ -44,18 +48,18 @@ def parse_hosts(hosts_file):
 def selenium_task(id, worker, host):
     url = f'http://{host}/'
     filename = f"{screens_directory}{host}.png"
+    say(id, f"☐ Begining to load host {host}...")
     try:
-        say(id, f"=_= Begining to load host {host}...")
-        try:
-            worker.get(url)
-            worker.get_screenshot_as_file(filename)
-            say(id, f"(V) I'm successfully load and screen {host}")
-        except:
-            say(id, f"(X) Page load not complite from {host}")
-            if take_screenshot_anyway:
-                worker.get_screenshot_as_file(filename)
+        worker.get(url)
+        sleep(wait_on_page)
+        worker.get_screenshot_as_file(filename)
+        say(id, f"(✅ 📷) I'm successfully load and screen {host}")
     except:
-        log.warning(f"Extremely strange Error on load {host}!")
+        if take_screenshot_anyway:
+            worker.get_screenshot_as_file(filename)
+            say(id, f"(❌ 📷) Page load not complite from {host}, but screenshot was taken.")
+        else:
+            say(id, f"(❌) Page load not complite from {host}. No screen.")
 
 
 def selenium_queue_listener(hosts_q, workers_q):
@@ -94,16 +98,20 @@ if __name__ == '__main__':
     for h in hosts:
         hosts_queue.put(h)
 
-    log.info("Create workers")
+    log.info(f"Try to create {count_of_workers} workers")
     worker_ids = list(range(count_of_workers))
     for worker_id in worker_ids:
         workers_queue.put(worker_id)
 
     selenium_workers = {}
-    for i in worker_ids:
-        selenium_workers[i] = webdriver.Firefox()
-        selenium_workers[i].set_page_load_timeout(page_load_timeout)
-        say(i, f"I born! I'm happy and ready to work!")
+    try:
+        for i in worker_ids:
+            selenium_workers[i] = driver()
+            selenium_workers[i].set_page_load_timeout(page_load_timeout)
+            say(i, f"I born! I'm happy and ready to work!")
+    except:
+        log.error('Create workers error! Be sure you have installed Selenium WebDriver \
+and gecodriver path in header is valid.')
 
     selenium_processes = [Process(target=selenium_queue_listener,
                                  args=(hosts_queue, workers_queue)) for _ in worker_ids]
